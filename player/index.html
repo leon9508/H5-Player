@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="description" content="H5视频播放器，你值得拥有">
+    <meta name="keywords" content="H5视频播放器,MP4">
+    <meta name="Author" content="Leon">
+    <title>H5视频播放器</title>
+    <link rel="stylesheet" href="./CSS/main.css">
+    <!--引入阿里图标-->
+    <link rel="stylesheet" href="http://at.alicdn.com/t/font_1970977_l3tcn3m8eh8.css">
+    <link rel="stylesheet" href="./CSS/phone.css" media="screen and (max-width:880px)">
+</head>
+<body>
+<div class="head">
+    <p class="description">点击右侧按钮可观看示例视频</p>
+    <button class="exampleVideo">载入示例视频</button>
+</div>
+<div class="container">
+    <video id="player" src=""  accept="video/*"></video>
+    <div class="progressBar">
+        <div class="currentProgress">
+            <div class="circle"></div>
+            <div class="ring"></div>
+        </div>
+    </div>
+    <div class="control">
+        <ul>
+            <li class="left">
+                <i id="play" class="iconfont icon-icon_play" title="播放" onclick="playButton.change()()"></i>
+                <span class="playTime"></span>
+            </li>
+            <li class="right">
+                <ul class="clearfix">
+                    <li class="volume" onmousemove="volume.mouseInVolume()" onmouseleave="volume.mouseOutVolume()">
+                        <div class="volumeIcon" onclick="volume.click()">
+                            <i class="iconfont icon-004laba-2"></i>
+                            <i class="iconfont icon-wifi isMuted"></i>
+                        </div>
+                        <div class="setValue" onmousemove="volume.mouseInSetValue()" onmouseleave="volume.mouseOutSetValue()" onmousedown="volume.adjustVolume()">
+                            <div class="volumeBar">
+                                <div class="currentValue">
+                                    <div class="circle">
+                                        <div class="halo"></div>
+                                        <div class="ring"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="fillArea"></div>
+                    </li>
+                    <li class="speed">
+                        <span>1x</span>
+                        <ul class="speedList">
+                            <li>2x</li>
+                            <li>1.5x</li>
+                            <li>1.2x</li>
+                            <li>1x</li>
+                            <li>0.5x</li>
+                        </ul>
+                        <div class="fillArea"></div>
+                    </li>
+                    <li class="file" title="载入视频文件">
+                        <input type="file" id="file-choose" name="videoFile">
+                        <label for="file-choose">
+                            <i class="iconfont icon-wenjian"></i>
+                        </label>
+                    </li>
+                    <li class="fullScreen" title="全屏">
+                        <i class="iconfont icon-quanping"></i>
+                    </li>
+                </ul>
+            </li>
+        </ul>
+    </div>
+    <div class="volumeSizeBox">
+        当前音量:
+        <span class="currentVolume"></span>
+    </div>
+</div>
+<script>
+    let container=document.querySelector(".container")
+    let progressBar=document.querySelector(".progressBar")
+    let currentProgress=document.querySelector(".currentProgress")
+    let control=document.querySelector(".control")
+    let player=document.querySelector("#player")
+    let inputFile=document.querySelector("#file-choose")
+    let setValue=document.querySelector(".setValue")
+    let volumeBar=document.querySelector(".volumeBar")
+    let currentValue=document.querySelector(".currentValue")
+    let volumeSizeBox=document.querySelector(".volumeSizeBox")
+    let currentVolume=document.querySelector(".currentVolume")
+    let speedList=document.querySelectorAll(".speedList li")
+    let currentSpeed=document.querySelector(".speed>span")
+    let fullScreen=document.querySelector(".fullScreen")
+    let chooseFile=document.querySelector(".file label")
+    let fullScreenBtn=document.querySelector(".fullScreen i")
+    let exampleVideo=document.querySelector(".exampleVideo")
+    let volumeFillArea=document.querySelector(".volume .fillArea")
+
+    let inputOnce=false
+    let firstTimeOut=null
+    let isFullScreen=false
+    let isMouseInControl=false
+    let totalVideoTime=[]
+    let time1=0
+    let time2=0
+
+    init()
+    function init(){
+        window.onload = function () {
+            var u = navigator.userAgent;
+            if (u.indexOf('Android') > -1 || u.indexOf('Linux') > -1||u.indexOf('iPhone') > -1) {//安卓手机
+                window.location.href="./mobile_phone/index.html"
+            }
+        };
+
+        window.URL = window.URL || window.webkitURL;
+
+        //用来实现底部控件的隐藏于显示
+        control.style.bottom=0
+        progressBar.style.bottom=50+"px"
+        container.onmouseenter=function(){
+            control.style.bottom=0+"px"
+            progressBar.style.bottom=50+"px"
+        }
+        container.onmouseleave=function(){
+            if(playButton.flag===true){
+                control.style.bottom=-54+"px"
+                progressBar.style.bottom=-4+"px"
+            }
+        }
+        //倍速初始化
+        ;[].forEach.bind(speedList)((i)=>{
+            i.onclick=()=>{
+                if(inputOnce){
+                    player.playbackRate=parseFloat(i.innerHTML);currentSpeed.innerHTML=i.innerHTML
+                }
+            }
+        })
+
+        //获取文件并进行相关初始化
+        inputFile.onchange=function () {
+            if(this.files.length){
+                inputOnce = true
+
+                player.src = window.URL.createObjectURL(this.files[0])
+                playButton.pauseVideo()
+                progressBar.style.display = "block"
+                currentProgress.style.width = 0 + "%"
+                currentSpeed.innerHTML="1x"
+            }
+        }
+
+        //调节进度时，如鼠标在进度条之外抬起，按照进度条之内抬起处理
+        window.onmouseup=function(){
+            if(handleWithPlayer.isProgressBarMouseDown){
+                progressBar.onmousemove=null
+                playButton.playVideo()
+                handleWithPlayer.isProgressBarMouseDown=false
+            }
+        }
+
+        window.onmousemove=function(e){
+            e.preventDefault()    //阻止鼠标移动默认事件
+        }
+        //全屏时鼠标鼠标指针闲置两秒则消失，同时底部菜单隐藏；当鼠标移动，指针显示，同时底部菜单显示
+        setInterval(function(){
+            if(document.fullscreenElement){
+                time1=new Date()
+                if(time1&&time2&&(time1-time2)>2000&&!isMouseInControl){
+                    container.style.cursor="none"
+                    if(playButton.flag===true){
+                        control.style.bottom=-50+"px"
+                        progressBar.style.bottom=0+"px"
+                    }
+                }else{
+                    container.style.cursor="default"
+                    control.style.bottom=0+"px"
+                    progressBar.style.bottom=50+"px"
+                }
+            }
+        },1000)
+        container.onmousemove=function(e){
+            if(document.fullscreenElement){
+                time2=time1
+            }
+        }
+        control.onmouseenter=function(){
+            isMouseInControl=true
+        }
+        control.onmouseleave=function(){
+            isMouseInControl=false
+        }
+
+        //选择文件导致退出全屏，页面元素进行相应调整
+        chooseFile.onclick=function(){
+            if(isFullScreen){
+                isFullScreen = false
+                FullScreen(container)
+                handleWithPlayer.adjustSize()
+                fullScreenBtn.classList.add("icon-quanping")
+                fullScreenBtn.classList.remove("icon-cancel-full-screen")
+                fullScreen.title="全屏"
+            }
+        }
+        exampleVideo.onclick=function(){
+            inputOnce = true
+            player.src="./video/Mojito.mkv"
+            playButton.pauseVideo()
+            progressBar.style.display = "block"
+            currentProgress.style.width = 0 + "%"
+            currentSpeed.innerHTML="1x"
+        }
+    }
+    //播放按钮对象
+    let playButton={
+        button:document.getElementById("play"),
+        flag:false,
+        change:function(){
+            return () => {
+                if (this.flag) {
+                    player.pause()
+                    this.flag = false
+                    this.button.classList.remove("icon-zanting")
+                    this.button.classList.add("icon-icon_play")
+                } else if(inputOnce){
+                    player.play()
+                    this.flag = true
+                    this.button.classList.remove("icon-icon_play")
+                    this.button.classList.add("icon-zanting")
+                }
+            }
+        },
+        playVideo(){
+            this.flag = false
+            this.change()()
+        },
+        pauseVideo(){
+            this.flag = true
+            this.change()()
+        }
+    }
+    //处理视频文件
+    let handleWithPlayer={
+        playTime:document.querySelector(".playTime"),
+        isProgressBarMouseDown:false,
+        adjustSize:function(){
+            let a=player.videoWidth
+            let b=player.videoHeight
+            let x
+            let y
+            if(isFullScreen){
+                x=window.screen.width
+                y=window.screen.height
+            }else{
+                x=container.clientWidth
+                y=container.clientHeight
+            }
+            if((a>x||b>y)&&(a/b>x/y)){
+                player.style.width=x+"px"
+                player.style.height=b/(a/x)+"px"
+            }else if((a>x||b>y)&&(a/b<x/y)){
+                player.style.height=y+"px"
+                player.style.width=a/(b/y)+"px"
+            }else if(a<x&&b<y){
+                player.style.width=a+"px"
+                player.style.height=b+"px"
+            }
+            if(Math.abs(a/b-x/y)<0.5){
+                player.style.width=x+"px"
+                player.style.height=y+"px"
+            }
+        },
+        loadVideo:function(){
+            return new Promise(resolve=>{
+                player.onloadedmetadata=function() {
+                    handleWithPlayer.adjustSize()
+                    player.volume=0.6*player.volume
+                    currentValue.style.height=Math.round(player.volume*80)+"px"
+                    let arr1=[]
+                    let videoHour=Math.floor(player.duration/3600)
+                    let videoMinute=Math.floor(player.duration/60)
+                    let videoSecond=Math.ceil(player.duration-Math.floor(player.duration/60)*60)
+                    arr1.push(videoHour,videoMinute,videoSecond)
+                    let totalTime=arr1.map(item=>item<10?item="0"+item:item+="")
+                    if(totalTime[0]==="00"){
+                        handleWithPlayer.playTime.innerHTML=`00:00 / ${totalTime[1]}:${totalTime[2]}`
+                    }else{
+                        handleWithPlayer.playTime.innerHTML=`00:00:00 / ${totalTime[0]}:${totalTime[1]}:${totalTime[2]}`
+                    }
+                    totalVideoTime=totalTime
+                    resolve()
+                }
+            })
+        },
+        updateTime:()=>{
+            let arr2 = []
+            if (playButton.flag === true) {
+                currentProgress.style.width = (player.currentTime / player.duration) * 100 + "%"
+                arr2[0] = Math.floor(player.currentTime / 3600)
+                arr2[1] = Math.floor(player.currentTime / 60)
+                arr2[2] = Math.ceil(player.currentTime - Math.floor(player.currentTime / 60) * 60)
+                if (arr2[2] > 59) {
+                    arr2[2] = 0
+                    arr2[1]++
+                }
+                if (arr2[1] > 59) {
+                    arr2[1] = 0
+                    arr2[0]++
+                }
+                let nowTime = arr2.map(item => item < 10 ? item = "0" + item : item += "")
+                if (totalVideoTime[0] === "00") {
+                    handleWithPlayer.playTime.innerHTML = `${nowTime[1]}:${nowTime[2]} / ${totalVideoTime[1]}:${totalVideoTime[2]}`
+                } else {
+                    handleWithPlayer.playTime.innerHTML = `${nowTime[0]}:${nowTime[1]}:${nowTime[2]} / ${totalVideoTime[0]}:${totalVideoTime[1]}:${totalVideoTime[2]}`
+                }
+                if (arr2[0] * 60 * 60 + arr2[1] * 60 + arr2[2] >= Math.ceil(player.duration)) {
+                    playButton.flag = true
+                    playButton.change()()
+                    currentProgress.style.width = 100 + "%"
+                }
+                arr2=null
+            }
+        },
+        manageTime(){
+            return new Promise(resolve=>{
+                setInterval(function () {
+                    this.updateTime(totalVideoTime)
+                }.bind(this), 1000)
+                resolve()
+            })
+        },
+        onlyUpdateTime(){
+            playButton.flag = true
+            this.updateTime(totalVideoTime)
+            playButton.flag = false
+        },
+    }
+    handleWithPlayer.loadVideo()
+        .then(()=>{return handleWithPlayer.manageTime()})
+        .then(()=>{
+            progressBar.onmousedown=function(e){
+                handleWithPlayer.isProgressBarMouseDown=true
+                let x=e.pageX-container.offsetLeft
+                player.currentTime=(x/progressBar.offsetWidth)*player.duration
+                currentProgress.style.width = (player.currentTime / player.duration) * 100 + "%"
+                playButton.pauseVideo()
+                handleWithPlayer.onlyUpdateTime()
+                progressBar.onmousemove=function(e){
+                    let x=e.pageX-container.offsetLeft
+                    player.currentTime=(x/progressBar.offsetWidth)*player.duration
+                    currentProgress.style.width = (player.currentTime / player.duration) * 100 + "%"
+                    handleWithPlayer.onlyUpdateTime()
+                }
+                progressBar.onmouseup=function(e){
+                    handleWithPlayer.isMouseDown=false
+                    progressBar.onmousemove=null
+                    let x=e.pageX-container.offsetLeft
+                    player.currentTime=(x/progressBar.offsetWidth)*player.duration
+                    handleWithPlayer.updateTime()
+                    playButton.playVideo()
+                }
+            }
+        })
+    //音量控制
+    let volume={
+        volumeIcon:document.querySelector(".isMuted"),
+        setValue:document.querySelector(".setValue"),
+        flag:true,
+        clickTimes:0,
+        mouseFlag1:false,
+        mouseFlag2:false,
+        playerVolume:0,
+        click:function(){
+            if(inputOnce===true){
+                volumeFillArea.style.display="block"
+                if(!this.flag&&this.clickTimes===0){
+                    this.setValue.style.display="block"
+                    player.volume=this.playerVolume||player.volume
+                    currentValue.style.height=Math.round(player.volume*80)+"px"
+                    this.flag=true
+                    this.volumeIcon.classList.remove("icon-Group-")
+                    this.volumeIcon.classList.add("icon-wifi")
+                    this.clickTimes++
+                }else{
+                    this.clickTimes++
+                    if(this.clickTimes===1){
+                        this.setValue.style.display="block"
+                        this.playerVolume=player.volume
+                    }
+                    if(this.clickTimes===2){
+                        if(this.flag){
+                            this.playerVolume=player.volume
+                            player.volume=0
+                            this.flag=false
+                            this.volumeIcon.classList.remove("icon-wifi")
+                            this.volumeIcon.classList.add("icon-Group-")
+                            currentValue.style.height=0+"px"
+                        }else{
+                            player.volume=this.playerVolume
+                            this.flag=true
+                            this.volumeIcon.classList.remove("icon-Group-")
+                            this.volumeIcon.classList.add("icon-wifi")
+                            currentValue.style.height=Math.round(player.volume*80)+"px"
+                        }
+                        this.clickTimes--
+                    }
+                }
+            }
+        },
+        mouseInSetValue(){
+            volume.mouseFlag1=true
+        },
+        mouseOutSetValue(){
+            volume.mouseFlag1=false
+            setValue.onmousemove=null
+            if(!volume.mouseFlag1&&!volume.mouseFlag2){
+                volume.setValue.style.display="none"
+                volume.clickTimes=0
+            }
+            volumeSizeBox.style.display="none"
+            volumeFillArea.style.display="none"
+        },
+        mouseInVolume(){
+            volume.mouseFlag2=true
+        },
+        mouseOutVolume(){
+            volume.mouseFlag2=false
+            if(!volume.mouseFlag1&&!volume.mouseFlag2){
+                volume.setValue.style.display="none"
+                volume.clickTimes=0
+            }
+            volumeSizeBox.style.display="none"
+            volumeFillArea.style.display="none"
+        },
+        adjustVolume(){
+            let barHeight=volumeBar.offsetHeight
+            let setValueTop=volume.getOffsetTop(setValue)
+            setValue.onmousemove=function(e){
+                let y=e.pageY
+                value=barHeight-(y-setValueTop-12)
+                value=value>barHeight?barHeight:(value<0?0:value)
+                currentValue.style.height=value+"px"
+                player.volume=Math.ceil(value / barHeight*100)/100
+                if(Math.floor(player.volume*100)===0){
+                    volume.volumeIcon.classList.remove("icon-wifi")
+                    volume.volumeIcon.classList.add("icon-Group-")
+                    volume.flag=false
+                }else{
+                    volume.volumeIcon.classList.remove("icon-Group-")
+                    volume.volumeIcon.classList.add("icon-wifi")
+                    volume.flag=true
+                }
+                volumeSizeBox.style.display="block"
+                if(Math.ceil(player.volume*100)<10){
+                    volumeSizeBox.style.width=72+"px"
+                }else if(Math.ceil(player.volume*100)===100){
+                    volumeSizeBox.style.width=88+"px"
+                } else {
+                    volumeSizeBox.style.width=80+"px"
+                }
+                currentVolume.innerHTML=`${Math.ceil(player.volume*100)}`
+            }
+            setValue.onmouseup=function(e){
+                clearTimeout(firstTimeOut)
+                setValue.onmousemove=null
+                let y=e.pageY
+                if(y>=setValueTop+12&&y<=setValueTop+92){
+                    currentValue.style.height=(barHeight-(y-setValueTop-12))+"px"
+                    player.volume=Math.ceil((barHeight - (y - setValueTop - 12)) / barHeight*100)/100
+                    if(Math.floor(player.volume*100)===0){
+                        volume.volumeIcon.classList.remove("icon-wifi")
+                        volume.volumeIcon.classList.add("icon-Group-")
+                    }else{
+                        volume.volumeIcon.classList.remove("icon-Group-")
+                        volume.volumeIcon.classList.add("icon-wifi")
+                    }
+                }
+                volumeSizeBox.style.display="block"
+                if(Math.ceil(player.volume*100)<10){
+                    volumeSizeBox.style.width=72+"px"
+                }else if(Math.ceil(player.volume*100)===100){
+                    volumeSizeBox.style.width=88+"px"
+                } else {
+                    volumeSizeBox.style.width=80+"px"
+                }
+                currentVolume.innerHTML=`${Math.ceil(player.volume*100)}`
+                firstTimeOut=setTimeout(()=>{
+                    volumeSizeBox.style.display="none"
+                },1000)
+            }
+        },
+        getOffsetTop(obj){
+            return (function getTop(o){
+                if(o==null){
+                    return 0;
+                }else{
+                    return o.offsetTop+getTop(o.offsetParent)+(o.offsetParent?o.offsetParent.clientTop:0);
+                }
+            })(obj)
+        }
+    }
+
+    //全屏事件
+    fullScreen.onclick=function(){
+        let isFullScreenEnable=document.fullscreenEnabled || document.webkitFullscreenEnabled || document.msFullscreenEnabled
+        if(isFullScreenEnable){
+            if(!isFullScreen){
+                isFullScreen=true
+                FullScreen(container)
+                handleWithPlayer.adjustSize()
+                fullScreenBtn.classList.remove("icon-quanping")
+                fullScreenBtn.classList.add("icon-cancel-full-screen")
+                fullScreen.title="取消全屏"
+            }else{
+                isFullScreen=false
+                FullScreen(container)
+                handleWithPlayer.adjustSize()
+                fullScreenBtn.classList.add("icon-quanping")
+                fullScreenBtn.classList.remove("icon-cancel-full-screen")
+                fullScreen.title="全屏"
+            }
+        }else{
+            alert("该浏览器暂不能请求全屏")
+        }
+    }
+    function FullScreen(el){
+        //Edge浏览器也是基于webkit内核
+        let isFull=document.webkitFullscreenElement || document.fullscreenElement || document.mozFullScreenElement;
+        if(!isFull){//进入全屏
+            (el.requestFullscreen&&el.requestFullscreen())||
+            (el.mozRequestFullScreen&&el.mozRequestFullScreen())||
+            (el.webkitRequestFullscreen&&el.webkitRequestFullscreen())||
+            (el.msRequestFullscreen&&el.msRequestFullscreen());
+        }else{ //退出全屏
+            document.exitFullscreen?document.exitFullscreen():
+                document.mozCancelFullScreen?document.mozCancelFullScreen():
+                    document.webkitExitFullscreen?document.webkitExitFullscreen():
+                        document.msExitFullscreen?document.msExitFullscreen():'';
+        }
+    }
+    //用来处理ESC按键退出全屏而元素状态不改变的问题
+    window.onresize=function(){
+        //如果系统检测不处在全屏状态下并且目前实际是全屏，则切换到非全屏
+        if(!(document.webkitFullscreenElement || document.fullscreenElement || document.mozFullScreenElement)&&isFullScreen){
+            isFullScreen=false
+            handleWithPlayer.adjustSize()
+            fullScreenBtn.classList.add("icon-quanping")
+            fullScreenBtn.classList.remove("icon-cancel-full-screen")
+            fullScreen.title="全屏"
+            container.style.cursor="default"
+            if(playButton.flag===true){
+                control.style.bottom=-54+"px"
+                progressBar.style.bottom=-4+"px"
+            }
+        }else if(!document.fullscreenElement&&!isFullScreen){
+            handleWithPlayer.adjustSize()
+        }
+    }
+</script>
+</body>
+</html>
